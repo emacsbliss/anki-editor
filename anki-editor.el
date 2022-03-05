@@ -823,6 +823,26 @@ bugfixes or new features of AnkiConnect."
         (message "AnkiConnect has been upgraded, you might have to restart Anki to make it in effect.")))))
 
 
+;;;###autoload
+(defun anki-editor--add-card-type ()
+  "add ANKI_NOTE_TYPE to a heading if it does not already have it"
+
+  (let* ((inhibit-message t)  ;; suppress echo message from `org-babel-exp-src-block'
+         (note-type (org-entry-get nil anki-editor-prop-note-type)))
+
+    (when (null note-type)
+        (org-set-property anki-editor-prop-note-type "Basic"))))
+
+(defun anki-editor-add-card-type-to-headings ()
+  "add ANKI_NOTE_TYPE to headings if
+  it does not already have it"
+
+  (interactive)
+
+  ;; TODO see how to use match to only process heading which does NOT have this note-type property
+  ;; (org-map-entries func (concat match "&" anki-editor-prop-note-type "<>\"\"") scope skip)))
+  (org-map-entries #'anki-editor--add-card-type))
+
 (provide 'anki-editor)
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
