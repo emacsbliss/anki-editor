@@ -76,6 +76,7 @@
 (defconst anki-editor-prop-failure-reason "ANKI_FAILURE_REASON")
 (defconst anki-editor-buffer-html-output "*AnkiEditor HTML Output*")
 (defconst anki-editor-org-tag-regexp "^\\([[:alnum:]_@#%]+\\)+$")
+(defconst anki-editor-prop-heading-as-front "ANKI_HEADING_AS_FRONT")
 
 (defgroup anki-editor nil
   "Customizations for anki-editor."
@@ -516,14 +517,63 @@ Where the subtree is created depends on PREFIX."
   "Get note types from Anki."
   (anki-editor--anki-connect-invoke-result "modelNames"))
 
+;;;###autoload
+(defun anki-editor--heading-as-front ()
+  "get the property for ANKI_HEADING_AS_FRONT
+   could be at heading or file level"
+
+  (org-entry-get-with-inheritance anki-editor-prop-heading-as-front)
+)
+
+(defun anki-editor--build-fields-simple-card ()
+  "Build a list of fields from current heading.
+  heading is used as Front of card, content is used as Back of card.
+  this return a alist with two keys: Front and Back"
+  (save-excursion
+     (let* ((inhibit-message t)  ;; suppress echo message from `org-babel-exp-src-block'
+            (field-heading (org-element-at-point))
+            (front (substring-no-properties
+                              (org-element-property
+                               :raw-value
+                               field-heading)))
+             (contents-begin (org-element-property :contents-begin field-heading))
+             (contents-end (org-element-property :contents-end field-heading))
+             (back (cond
+                    ((and contents-begin contents-end)
+                       (or (org-export-string-as
+                              (buffer-substring
+                                contents-begin
+                                ;; in case the buffer is narrowed,
+                                ;; e.g. by `org-map-entries' when
+                                ;; scope is `tree'
+                                (min (point-max) contents-end))
+                                anki-editor--ox-anki-html-backend
+                                t
+                                anki-editor--ox-export-ext-plist)
+
+                                ;; 8.2.10 version of
+                                ;; `org-export-filter-apply-functions'
+                                ;; returns nil for an input of empty string,
+                                ;; which will cause AnkiConnect to fail ""
+                                ))
+
+                    (t ""))))
+
+           `(("Front" . ,front)
+             ("Back" . ,back)))))
+
+
 (defun anki-editor-note-at-point ()
   "Construct an alist representing a note from current entry."
-  (let ((org-trust-scanner-tags t)
-        (deck (org-entry-get-with-inheritance anki-editor-prop-deck))
-        (note-id (org-entry-get nil anki-editor-prop-note-id))
-        (note-type (org-entry-get nil anki-editor-prop-note-type))
-        (tags (anki-editor--get-tags))
-        (fields (anki-editor--build-fields)))
+  (let* ((org-trust-scanner-tags t)
+         (deck (org-entry-get-with-inheritance anki-editor-prop-deck))
+         (note-id (org-entry-get nil anki-editor-prop-note-id))
+         (note-type (org-entry-get nil anki-editor-prop-note-type))
+         (tags (anki-editor--get-tags))
+         (heading-as-front (anki-editor--heading-as-front))
+         (fields (if (string-equal heading-as-front "Y")
+                   (anki-editor--build-fields-simple-card)
+                   (anki-editor--build-fields))))
 
     (unless deck (error "No deck specified"))
     (unless note-type (error "Missing note type"))
